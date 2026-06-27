@@ -7,7 +7,6 @@
     <style>
         :root {
             --primary-color: #0071e3;
-            --accent-color: #ffcc00;
             --bg-color: #f5f5f7;
             --card-bg: #ffffff;
             --text-main: #1d1d1f;
@@ -42,116 +41,31 @@
             padding-bottom: 16px;
         }
 
-        h1 {
-            font-size: 22px;
-            margin: 0 0 6px 0;
-            font-weight: 700;
-        }
+        h1 { font-size: 22px; margin: 0 0 6px 0; font-weight: 700; }
+        .subtitle { font-size: 13px; color: var(--text-sub); margin: 0; }
 
-        .subtitle {
-            font-size: 13px;
-            color: var(--text-sub);
-            margin: 0;
-        }
+        .route-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .route-tag { font-size: 11px; background: #f0f0f5; color: #48484a; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
 
-        .route-tags {
-            margin-top: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 16px; outline: none; }
+        button { padding: 12px 20px; border: none; background-color: var(--primary-color); color: white; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
 
-        .route-tag {
-            font-size: 11px;
-            background: #f0f0f5;
-            color: #48484a;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
-
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            font-size: 16px;
-            outline: none;
-        }
-
-        button {
-            padding: 12px 20px;
-            border: none;
-            background-color: var(--primary-color);
-            color: white;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .bus-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 0;
-            border-bottom: 1px solid #f0f0f2;
-        }
-
-        .bus-card:last-child {
-            border-bottom: none;
-        }
-
-        .bus-info {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
+        .bus-card { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid #f0f0f2; }
+        .bus-card:last-child { border-bottom: none; }
+        .bus-info { display: flex; align-items: center; gap: 14px; }
 
         .route-number {
-            background-color: var(--accent-color);
-            color: #000000;
-            font-weight: 800;
-            font-size: 16px;
-            padding: 6px 10px;
-            border-radius: 6px;
-            min-width: 54px;
-            text-align: center;
+            font-weight: 800; font-size: 16px; padding: 6px 10px; border-radius: 6px; min-width: 54px; text-align: center; color: black;
         }
+        .ctb-badge { background-color: #ffcc00; }
+        .kmb-badge { background-color: #f3c6c6; color: #a90000; }
 
-        .destination-text {
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .operator-tag {
-            font-size: 11px;
-            color: var(--text-sub);
-            margin-top: 2px;
-        }
-
-        .eta-value {
-            font-weight: 700;
-            font-size: 16px;
-            color: var(--success-color);
-        }
-        
-        .imminent {
-            color: #ff3b30;
-        }
-
-        .status-msg {
-            text-align: center;
-            color: var(--text-sub);
-            padding: 10px 0;
-            font-size: 14px;
-        }
+        .destination-text { font-weight: 600; font-size: 15px; }
+        .operator-tag { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+        .eta-value { font-weight: 700; font-size: 16px; color: var(--success-color); }
+        .imminent { color: #ff3b30; }
+        .status-msg { text-align: center; color: var(--text-sub); padding: 10px 0; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -159,7 +73,7 @@
 <div class="app-container">
     <header>
         <h1>My Bus Tracker</h1>
-        <p class="subtitle">Real-time schedule monitor</p>
+        <p class="subtitle">Real-time multi-operator monitor</p>
         <div class="route-tags">
             <span class="route-tag">95C</span>
             <span class="route-tag">37A</span>
@@ -172,8 +86,7 @@
     </header>
 
     <div class="search-box">
-        <!-- Defaulting to Queen Mary Hospital (002243) where 970X runs frequently -->
-        <input type="text" id="stopIdInput" value="002243" maxlength="6" placeholder="Enter 6-digit Stop ID">
+        <input type="text" id="stopIdInput" value="002243" maxlength="6" placeholder="Enter 6-digit Citybus ID">
         <button onclick="fetchSchedules()">Refresh</button>
     </div>
 
@@ -183,42 +96,65 @@
 </div>
 
 <script>
+    // Known cross-reference dictionary to handle shared shelters natively
+    const KMB_STOP_MAPPING = {
+        "002243": "CE04-T-1100-0", // Queen Mary Hospital
+        "002271": "CH09-T-1000-0"  // Chi Fu Fa Yuen Terminal
+    };
+
     const TARGET_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
-        const stopId = document.getElementById('stopIdInput').value.trim();
+        const ctbStopId = document.getElementById('stopIdInput').value.trim();
         const resultsDiv = document.getElementById('results');
 
-        if (!stopId) {
+        if (!ctbStopId) {
             alert('Please provide a 6-digit Stop ID.');
             return;
         }
 
-        resultsDiv.innerHTML = '<div class="status-msg">Syncing live schedules across operators...</div>';
+        resultsDiv.innerHTML = '<div class="status-msg">Syncing dual-operator schedules...</div>';
         let allEtaData = [];
 
+        // 1. Collect Active Citybus Streams
         for (const route of TARGET_ROUTES) {
-            // 1. Try Citybus stream
             try {
-                const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${stopId}/${route}`);
+                const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${ctbStopId}/${route}`);
                 if (ctbRes.ok) {
                     const json = await ctbRes.json();
                     if (json.data && json.data.length > 0) {
-                        json.data.forEach(item => item.operator = "Citybus");
-                        allEtaData = allEtaData.concat(json.data);
+                        json.data.forEach(item => {
+                            allEtaData.push({
+                                route: item.route,
+                                dest: item.dest_en,
+                                eta: item.eta,
+                                operator: "Citybus",
+                                badgeClass: "ctb-badge"
+                            });
+                        });
                     }
                 }
             } catch (e) { console.error(e); }
+        }
 
-            // 2. Try KMB stream (for routes like 970X)
+        // 2. Cross-reference and Collect KMB Streams
+        const kmbStopId = KMB_STOP_MAPPING[ctbStopId];
+        if (kmbStopId) {
             try {
-                const kmbRes = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+                const kmbRes = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${kmbStopId}`);
                 if (kmbRes.ok) {
                     const json = await kmbRes.json();
                     if (json.data && json.data.length > 0) {
-                        const matchingKmb = json.data.filter(item => item.route.toUpperCase() === route.toUpperCase());
-                        matchingKmb.forEach(item => item.operator = "KMB");
-                        allEtaData = allEtaData.concat(matchingKmb);
+                        const matchingKmb = json.data.filter(item => TARGET_ROUTES.includes(item.route.toUpperCase()));
+                        matchingKmb.forEach(item => {
+                            allEtaData.push({
+                                route: item.route,
+                                dest: item.dest_en,
+                                eta: item.eta,
+                                operator: "KMB",
+                                badgeClass: "kmb-badge"
+                            });
+                        });
                     }
                 }
             } catch (e) { console.error(e); }
@@ -229,7 +165,7 @@
             return;
         }
 
-        // Filter unique entries and sort chronologically
+        // Sort everything chronologically by time
         allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
 
         const currentTime = new Date();
@@ -246,16 +182,14 @@
                 } else {
                     displayTime = `${minsLeft} mins`;
                 }
-            } else if (bus.rmk_en) {
-                displayTime = bus.rmk_en;
             }
 
             return `
                 <div class="bus-card">
                     <div class="bus-info">
-                        <div class="route-number">${bus.route}</div>
+                        <div class="route-number ${bus.badgeClass}">${bus.route}</div>
                         <div>
-                            <div class="destination-text">to ${bus.dest_en || 'Terminal'}</div>
+                            <div class="destination-text">to ${bus.dest || 'Terminal'}</div>
                             <div class="operator-tag">${bus.operator}</div>
                         </div>
                     </div>
