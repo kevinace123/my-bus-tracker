@@ -3,77 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Citybus Direct Connection Verification</title>
+    <title>My Personal Bus Tracker</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f5f5f7; padding: 20px; text-align: center; }
-        .box { max-width: 440px; margin: 0 auto; background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #eee; font-weight: bold; font-size: 16px; }
-        .route { background: #ffcc00; color: black; padding: 4px 10px; border-radius: 6px; }
-        .time { color: #34c759; }
-        #status { margin: 15px 0; font-size: 14px; color: #0071e3; font-weight: 600; }
+        :root {
+            --primary-color: #0071e3;
+            --accent-color: #ffcc00;
+            --bg-color: #f5f5f7;
+            --card-bg: #ffffff;
+            --text-main: #1d1d1f;
+            --text-sub: #86868b;
+            --success-color: #34c759;
+            --border-color: #d2d2d7;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        header {
+            margin-bottom: 24px;
+            border-bottom: 1px solid #f0f0f2;
+            padding-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 6px 0;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-sub);
+            margin: 0;
+        }
+
+        .route-tags {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .route-tag {
+            font-size: 11px;
+            background: #f0f0f5;
+            color: #48484a;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .bus-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid #f0f0f2;
+        }
+
+        .bus-card:last-child {
+            border-bottom: none;
+        }
+
+        .bus-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .route-number {
+            background-color: var(--accent-color);
+            color: #000000;
+            font-weight: 800;
+            font-size: 16px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            min-width: 54px;
+            text-align: center;
+        }
+
+        .destination-text {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .operator-tag {
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-top: 2px;
+        }
+
+        .eta-value {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--success-color);
+        }
+        
+        .imminent {
+            color: #ff3b30;
+        }
+
+        .status-msg {
+            text-align: center;
+            color: var(--text-sub);
+            padding: 10px 0;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h2>Citybus Direct Live Test</h2>
-    <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Testing Route 970X at Queen Mary Hospital</p>
-    
-    <div id="status">Initializing connection...</div>
-    <div id="output"> Sifting for live updates...</div>
+<div class="app-container">
+    <header>
+        <h1>My Bus Tracker</h1>
+        <p class="subtitle">Real-time schedule monitor</p>
+        <div class="route-tags">
+            <span class="route-tag">95C</span>
+            <span class="route-tag">37A</span>
+            <span class="route-tag">970X</span>
+            <span class="route-tag">37B</span>
+            <span class="route-tag">37X</span>
+            <span class="route-tag">40</span>
+            <span class="route-tag">40P</span>
+        </div>
+    </header>
+
+    <div class="search-box">
+        <!-- Defaulting to Queen Mary Hospital (002243) where 970X runs frequently -->
+        <input type="text" id="stopIdInput" value="002243" maxlength="6" placeholder="Enter 6-digit Stop ID">
+        <button onclick="fetchSchedules()">Refresh</button>
+    </div>
+
+    <div id="results" class="results-container">
+        <div class="status-msg">Sifting for live updates...</div>
+    </div>
 </div>
 
 <script>
-    async function runDirectTest() {
-        const output = document.getElementById('output');
-        const status = document.getElementById('status');
-        
-        try {
-            status.innerHTML = "Connecting directly to Government API endpoint...";
-            
-            // Standard individual ETA endpoint for Route 970X at Queen Mary Hospital (002243)
-            const res = await fetch('https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/002243/970X');
-            
-            if (!res.ok) {
-                status.innerHTML = `<span style="color:red;">✗ HTTP Network Error: ${res.status}</span>`;
-                return;
-            }
+    const TARGET_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
-            const parsed = await res.json();
-            status.innerHTML = "<span style='color:green;'>✓ API Data Successfully Downloaded</span>";
+    async function fetchSchedules() {
+        const stopId = document.getElementById('stopIdInput').value.trim();
+        const resultsDiv = document.getElementById('results');
 
-            if (!parsed.data || parsed.data.length === 0) {
-                output.innerHTML = "No upcoming 970X buses scheduled for tonight.";
-                return;
-            }
-
-            const now = new Date();
-            output.innerHTML = parsed.data.map(bus => {
-                let minutesDisplay = "No ETA";
-                if (bus.eta) {
-                    const deltaMins = Math.max(0, Math.round((new Date(bus.eta) - now) / 60000));
-                    minutesDisplay = deltaMins === 0 ? "Arrived" : `${deltaMins} mins`;
-                } else if (bus.rmk_en) {
-                    minutesDisplay = bus.rmk_en;
-                }
-
-                return `
-                    <div class="row">
-                        <span class="route">${bus.route}</span>
-                        <span>to ${bus.dest_en || 'Terminal'}</span>
-                        <span class="time">${minutesDisplay}</span>
-                    </div>
-                `;
-            }).join('');
-
-        } catch (err) {
-            status.innerHTML = `<span style="color:red;">✗ Runtime Exception: ${err.message}</span>`;
-            console.error(err);
+        if (!stopId) {
+            alert('Please provide a 6-digit Stop ID.');
+            return;
         }
+
+        resultsDiv.innerHTML = '<div class="status-msg">Syncing live schedules across operators...</div>';
+        let allEtaData = [];
+
+        for (const route of TARGET_ROUTES) {
+            // 1. Try Citybus stream
+            try {
+                const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${stopId}/${route}`);
+                if (ctbRes.ok) {
+                    const json = await ctbRes.json();
+                    if (json.data && json.data.length > 0) {
+                        json.data.forEach(item => item.operator = "Citybus");
+                        allEtaData = allEtaData.concat(json.data);
+                    }
+                }
+            } catch (e) { console.error(e); }
+
+            // 2. Try KMB stream (for routes like 970X)
+            try {
+                const kmbRes = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${stopId}`);
+                if (kmbRes.ok) {
+                    const json = await kmbRes.json();
+                    if (json.data && json.data.length > 0) {
+                        const matchingKmb = json.data.filter(item => item.route.toUpperCase() === route.toUpperCase());
+                        matchingKmb.forEach(item => item.operator = "KMB");
+                        allEtaData = allEtaData.concat(matchingKmb);
+                    }
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        if (allEtaData.length === 0) {
+            resultsDiv.innerHTML = '<div class="status-msg">No upcoming schedules found for these routes right now.</div>';
+            return;
+        }
+
+        // Filter unique entries and sort chronologically
+        allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
+
+        const currentTime = new Date();
+
+        resultsDiv.innerHTML = allEtaData.map(bus => {
+            let displayTime = "No ETA";
+            let isImminent = false;
+
+            if (bus.eta) {
+                const minsLeft = Math.max(0, Math.round((new Date(bus.eta) - currentTime) / 60000));
+                if (minsLeft <= 1) {
+                    displayTime = minsLeft === 0 ? "Arrived" : "1 min";
+                    isImminent = true;
+                } else {
+                    displayTime = `${minsLeft} mins`;
+                }
+            } else if (bus.rmk_en) {
+                displayTime = bus.rmk_en;
+            }
+
+            return `
+                <div class="bus-card">
+                    <div class="bus-info">
+                        <div class="route-number">${bus.route}</div>
+                        <div>
+                            <div class="destination-text">to ${bus.dest_en || 'Terminal'}</div>
+                            <div class="operator-tag">${bus.operator}</div>
+                        </div>
+                    </div>
+                    <div class="eta-value ${isImminent ? 'imminent' : ''}">${displayTime}</div>
+                </div>
+            `;
+        }).join('');
     }
 
-    // Run automatically on load
-    window.addEventListener('DOMContentLoaded', runDirectTest);
+    window.addEventListener('DOMContentLoaded', fetchSchedules);
 </script>
 
 </body>
