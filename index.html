@@ -86,7 +86,7 @@
     </header>
 
     <div class="search-box">
-        <!-- Defaulting to Chi Fu Fa Yuen Terminal (002271) -->
+        <!-- Defaulting to Chi Fu Fa Yuen Terminal Stop ID -->
         <input type="text" id="stopIdInput" value="002271" maxlength="6" placeholder="Enter 6-digit Citybus ID">
         <button onclick="fetchSchedules()">Refresh</button>
     </div>
@@ -103,7 +103,7 @@
         "002271": "CH09-T-1000-0"  // Chi Fu Fa Yuen Terminal
     };
 
-    // Whitelist definitions to filter out irrelevant buses passing the same stop
+    // Whitelist definitions of targeted routes
     const MY_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
@@ -115,34 +115,44 @@
             return;
         }
 
-        resultsDiv.innerHTML = '<div class="status-msg">Syncing dual-operator schedules...</div>';
+        resultsDiv.innerHTML = '<div class="status-msg">Syncing live open schedules...</div>';
         let allEtaData = [];
 
-        // 1. Fetch ALL Citybus lines hitting this stop pole (catches both Inbound and Outbound splits)
-        try {
-            const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/stop-eta/ctb/${ctbStopId}`);
-            if (ctbRes.ok) {
-                const json = await ctbRes.json();
-                if (json.data && json.data.length > 0) {
-                    json.data.forEach(item => {
-                        // Stripping raw backend strings (e.g., "95C-1" or "40-O" becomes "95C" or "40")
-                        const baseRoute = item.route.split('-')[0].toUpperCase();
-                        
-                        if (MY_ROUTES.includes(baseRoute)) {
-                            allEtaData.push({
-                                route: baseRoute, 
-                                dest: item.dest_en,
-                                eta: item.eta,
-                                operator: "Citybus",
-                                badgeClass: "ctb-badge"
-                            });
-                        }
-                    });
-                }
-            }
-        } catch (e) { console.error("Citybus sync fail:", e); }
+        // 1. Fetch valid Citybus routes by explicitly trying both INBOUND and OUTBOUND lanes
+        const ctbPromises = [];
+        
+        MY_ROUTES.forEach(route => {
+            const directions = ["inbound", "outbound"];
+            directions.forEach(dir => {
+                const url = `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${ctbStopId}/${route}/${dir}`;
+                ctbPromises.push(
+                    fetch(url)
+                        .then(res => res.ok ? res.json() : null)
+                        .then(json => {
+                            if (json && json.data) {
+                                json.data.forEach(item => {
+                                    // Make sure this data window is actually matching our active stop
+                                    if (item.stop === ctbStopId && item.eta) {
+                                        allEtaData.push({
+                                            route: route,
+                                            dest: item.dest_en,
+                                            eta: item.eta,
+                                            operator: "Citybus",
+                                            badgeClass: "ctb-badge"
+                                        });
+                                    }
+                                });
+                            }
+                        })
+                        .catch(e => console.error(`Error pulling Citybus ${route} ${dir}:`, e))
+                );
+            });
+        });
 
-        // 2. Cross-reference KMB matrices for joint-operated or cross-harbor listings
+        // Wait for all Citybus configuration streams to resolve
+        await Promise.all(ctbPromises);
+
+        // 2. Cross-reference KMB matrices for joint/cross-harbor operations
         const kmbStopId = KMB_STOP_MAPPING[ctbStopId];
         if (kmbStopId) {
             try {
@@ -152,7 +162,7 @@
                     if (json.data && json.data.length > 0) {
                         json.data.forEach(item => {
                             const baseRoute = item.route.split('-')[0].toUpperCase();
-                            if (MY_ROUTES.includes(baseRoute)) {
+                            if (MY_ROUTES.includes(baseRoute) && item.eta) {
                                 allEtaData.push({
                                     route: baseRoute,
                                     dest: item.dest_en,
@@ -164,15 +174,24 @@
                         });
                     }
                 }
-            } catch (e) { console.error("KMB sync fail:", e); }
+            } catch (e) { console.error("KMB sync failure:", e); }
         }
 
+        // Clean out duplicate schedules arriving at exactly the same minute
+        const seen = new Set();
+        allEtaData = allEtaData.filter(item => {
+            const signature = `${item.route}-${item.eta}-${item.operator}`;
+            if (seen.has(signature)) return false;
+            seen.add(signature);
+            return true;
+        });
+
         if (allEtaData.length === 0) {
-            resultsDiv.innerHTML = '<div class="status-msg">No upcoming schedules found for these routes at this stop right now.</div>';
+            resultsDiv.innerHTML = '<div class="status-msg">No upcoming schedules found for these routes right now.</div>';
             return;
         }
 
-        // Filter unique entries and arrange chronologically by arrival time
+        // Sort chronologically by arrival time
         allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
 
         const currentTime = new Date();
@@ -181,14 +200,12 @@
             let displayTime = "No ETA";
             let isImminent = false;
 
-            if (bus.eta) {
-                const minsLeft = Math.max(0, Math.round((new Date(bus.eta) - currentTime) / 60000));
-                if (minsLeft <= 1) {
-                    displayTime = minsLeft === 0 ? "Arrived" : "1 min";
-                    isImminent = true;
-                } else {
-                    displayTime = `${minsLeft} mins`;
-                }
+            const minsLeft = Math.max(0, Math.round((new Date(bus.eta) - currentTime) / 60000));
+            if (minsLeft <= 1) {
+                displayTime = minsLeft === 0 ? "Arrived" : "1 min";
+                isImminent = true;
+            } else {
+                displayTime = `${minsLeft} mins`;
             }
 
             return `
