@@ -86,7 +86,6 @@
     </header>
 
     <div class="search-box">
-        <!-- Defaulting to Chi Fu Fa Yuen Terminal Stop ID -->
         <input type="text" id="stopIdInput" value="002271" maxlength="6" placeholder="Enter 6-digit Citybus ID">
         <button onclick="fetchSchedules()">Refresh</button>
     </div>
@@ -97,13 +96,11 @@
 </div>
 
 <script>
-    // Maps the physical Citybus stop shelter to the corresponding KMB stop code
     const KMB_STOP_MAPPING = {
         "002243": "CE04-T-1100-0", // Queen Mary Hospital
         "002271": "CH09-T-1000-0"  // Chi Fu Fa Yuen Terminal
     };
 
-    // Whitelist definitions of targeted routes
     const MY_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
@@ -117,42 +114,35 @@
 
         resultsDiv.innerHTML = '<div class="status-msg">Syncing live open schedules...</div>';
         let allEtaData = [];
-
-        // 1. Fetch valid Citybus routes by explicitly trying both INBOUND and OUTBOUND lanes
         const ctbPromises = [];
         
+        // Corrected Loop: Queries the pure URL endpoint which pulls both inbound and outbound automatically
         MY_ROUTES.forEach(route => {
-            const directions = ["inbound", "outbound"];
-            directions.forEach(dir => {
-                const url = `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${ctbStopId}/${route}/${dir}`;
-                ctbPromises.push(
-                    fetch(url)
-                        .then(res => res.ok ? res.json() : null)
-                        .then(json => {
-                            if (json && json.data) {
-                                json.data.forEach(item => {
-                                    // Make sure this data window is actually matching our active stop
-                                    if (item.stop === ctbStopId && item.eta) {
-                                        allEtaData.push({
-                                            route: route,
-                                            dest: item.dest_en,
-                                            eta: item.eta,
-                                            operator: "Citybus",
-                                            badgeClass: "ctb-badge"
-                                        });
-                                    }
-                                });
-                            }
-                        })
-                        .catch(e => console.error(`Error pulling Citybus ${route} ${dir}:`, e))
-                );
-            });
+            const url = `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${ctbStopId}/${route}`;
+            ctbPromises.push(
+                fetch(url)
+                    .then(res => res.ok ? res.json() : null)
+                    .then(json => {
+                        if (json && json.data) {
+                            json.data.forEach(item => {
+                                if (item.stop === ctbStopId && item.eta) {
+                                    allEtaData.push({
+                                        route: route,
+                                        dest: item.dest_en,
+                                        eta: item.eta,
+                                        operator: "Citybus",
+                                        badgeClass: "ctb-badge"
+                                    });
+                                }
+                            });
+                        }
+                    })
+                    .catch(e => console.error(`Error pulling Citybus ${route}:`, e))
+            );
         });
 
-        // Wait for all Citybus configuration streams to resolve
         await Promise.all(ctbPromises);
 
-        // 2. Cross-reference KMB matrices for joint/cross-harbor operations
         const kmbStopId = KMB_STOP_MAPPING[ctbStopId];
         if (kmbStopId) {
             try {
@@ -177,7 +167,7 @@
             } catch (e) { console.error("KMB sync failure:", e); }
         }
 
-        // Clean out duplicate schedules arriving at exactly the same minute
+        // Deduplicate overlapping departures
         const seen = new Set();
         allEtaData = allEtaData.filter(item => {
             const signature = `${item.route}-${item.eta}-${item.operator}`;
@@ -191,9 +181,7 @@
             return;
         }
 
-        // Sort chronologically by arrival time
         allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
-
         const currentTime = new Date();
 
         resultsDiv.innerHTML = allEtaData.map(bus => {
