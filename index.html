@@ -73,7 +73,7 @@
 <div class="app-container">
     <header>
         <h1>My Bus Tracker</h1>
-        <p class="subtitle">Real-time multi-operator monitor</p>
+        <p class="subtitle">Real-time dynamic schedule monitor</p>
         <div class="route-tags">
             <span class="route-tag">95C</span>
             <span class="route-tag">37A</span>
@@ -86,7 +86,8 @@
     </header>
 
     <div class="search-box">
-        <input type="text" id="stopIdInput" value="002243" maxlength="6" placeholder="Enter 6-digit Citybus ID">
+        <!-- Defaulting to Chi Fu Fa Yuen Terminal (002271) -->
+        <input type="text" id="stopIdInput" value="002271" maxlength="6" placeholder="Enter 6-digit Citybus ID">
         <button onclick="fetchSchedules()">Refresh</button>
     </div>
 
@@ -96,48 +97,52 @@
 </div>
 
 <script>
-    // Known cross-reference dictionary to handle shared shelters natively
+    // Maps the physical Citybus stop shelter to the corresponding KMB stop code
     const KMB_STOP_MAPPING = {
         "002243": "CE04-T-1100-0", // Queen Mary Hospital
         "002271": "CH09-T-1000-0"  // Chi Fu Fa Yuen Terminal
     };
 
-    const TARGET_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
+    // Whitelist definitions to filter out irrelevant buses passing the same stop
+    const MY_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
         const ctbStopId = document.getElementById('stopIdInput').value.trim();
         const resultsDiv = document.getElementById('results');
 
         if (!ctbStopId) {
-            alert('Please provide a 6-digit Stop ID.');
+            alert('Please provide a valid Stop ID.');
             return;
         }
 
         resultsDiv.innerHTML = '<div class="status-msg">Syncing dual-operator schedules...</div>';
         let allEtaData = [];
 
-        // 1. Collect Active Citybus Streams
-        for (const route of TARGET_ROUTES) {
-            try {
-                const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${ctbStopId}/${route}`);
-                if (ctbRes.ok) {
-                    const json = await ctbRes.json();
-                    if (json.data && json.data.length > 0) {
-                        json.data.forEach(item => {
+        // 1. Fetch ALL Citybus lines hitting this stop pole (catches both Inbound and Outbound splits)
+        try {
+            const ctbRes = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/stop-eta/ctb/${ctbStopId}`);
+            if (ctbRes.ok) {
+                const json = await ctbRes.json();
+                if (json.data && json.data.length > 0) {
+                    json.data.forEach(item => {
+                        // Stripping raw backend strings (e.g., "95C-1" or "40-O" becomes "95C" or "40")
+                        const baseRoute = item.route.split('-')[0].toUpperCase();
+                        
+                        if (MY_ROUTES.includes(baseRoute)) {
                             allEtaData.push({
-                                route: item.route,
+                                route: baseRoute, 
                                 dest: item.dest_en,
                                 eta: item.eta,
                                 operator: "Citybus",
                                 badgeClass: "ctb-badge"
                             });
-                        });
-                    }
+                        }
+                    });
                 }
-            } catch (e) { console.error(e); }
-        }
+            }
+        } catch (e) { console.error("Citybus sync fail:", e); }
 
-        // 2. Cross-reference and Collect KMB Streams
+        // 2. Cross-reference KMB matrices for joint-operated or cross-harbor listings
         const kmbStopId = KMB_STOP_MAPPING[ctbStopId];
         if (kmbStopId) {
             try {
@@ -145,27 +150,29 @@
                 if (kmbRes.ok) {
                     const json = await kmbRes.json();
                     if (json.data && json.data.length > 0) {
-                        const matchingKmb = json.data.filter(item => TARGET_ROUTES.includes(item.route.toUpperCase()));
-                        matchingKmb.forEach(item => {
-                            allEtaData.push({
-                                route: item.route,
-                                dest: item.dest_en,
-                                eta: item.eta,
-                                operator: "KMB",
-                                badgeClass: "kmb-badge"
-                            });
+                        json.data.forEach(item => {
+                            const baseRoute = item.route.split('-')[0].toUpperCase();
+                            if (MY_ROUTES.includes(baseRoute)) {
+                                allEtaData.push({
+                                    route: baseRoute,
+                                    dest: item.dest_en,
+                                    eta: item.eta,
+                                    operator: "KMB",
+                                    badgeClass: "kmb-badge"
+                                });
+                            }
                         });
                     }
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("KMB sync fail:", e); }
         }
 
         if (allEtaData.length === 0) {
-            resultsDiv.innerHTML = '<div class="status-msg">No upcoming schedules found for these routes right now.</div>';
+            resultsDiv.innerHTML = '<div class="status-msg">No upcoming schedules found for these routes at this stop right now.</div>';
             return;
         }
 
-        // Sort everything chronologically by time
+        // Filter unique entries and arrange chronologically by arrival time
         allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
 
         const currentTime = new Date();
