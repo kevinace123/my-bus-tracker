@@ -17,7 +17,7 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
             margin: 0;
@@ -31,7 +31,7 @@
             max-width: 480px;
             background: var(--card-bg);
             border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 24 rgba(0, 0, 0, 0.08);
             padding: 24px;
             box-sizing: border-box;
         }
@@ -46,7 +46,6 @@
             font-size: 22px;
             margin: 0 0 6px 0;
             font-weight: 700;
-            color: var(--text-main);
         }
 
         .subtitle {
@@ -84,11 +83,6 @@
             border-radius: 10px;
             font-size: 16px;
             outline: none;
-            transition: border-color 0.2s;
-        }
-
-        input:focus {
-            border-color: var(--primary-color);
         }
 
         button {
@@ -100,19 +94,6 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        button:hover {
-            background-color: #0077ed;
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        .results-container {
-            margin-top: 10px;
         }
 
         .bus-card {
@@ -121,7 +102,6 @@
             justify-content: space-between;
             padding: 16px 0;
             border-bottom: 1px solid #f0f0f2;
-            animation: fadeIn 0.3s ease-in-out;
         }
 
         .bus-card:last-child {
@@ -132,8 +112,6 @@
             display: flex;
             align-items: center;
             gap: 14px;
-            flex: 1;
-            min-width: 0;
         }
 
         .route-number {
@@ -145,34 +123,11 @@
             border-radius: 6px;
             min-width: 54px;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            text-transform: uppercase;
-        }
-
-        .destination-details {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
         }
 
         .destination-text {
             font-weight: 600;
             font-size: 15px;
-            color: var(--text-main);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .operator-text {
-            font-size: 11px;
-            color: var(--text-sub);
-            margin-top: 2px;
-        }
-
-        .eta-container {
-            text-align: right;
-            padding-left: 10px;
         }
 
         .eta-value {
@@ -181,27 +136,15 @@
             color: var(--success-color);
         }
         
-        .eta-value.imminent {
+        .imminent {
             color: #ff3b30;
-            animation: pulse 1.5s infinite;
         }
 
         .status-msg {
             text-align: center;
             color: var(--text-sub);
-            padding: 4px 0;
+            padding: 10px 0;
             font-size: 14px;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -228,104 +171,84 @@
     </div>
 
     <div id="results" class="results-container">
-        <div class="status-msg">Enter a Citybus stop code to display upcoming tracking schedules.</div>
+        <div class="status-msg">Enter a Citybus stop code to display schedules.</div>
     </div>
 </div>
 
 <script>
-    const TARGET_ROUTES = new Set(["95C", "37A", "970X", "37B", "37X", "40", "40P"]);
+    // List of your daily routes
+    const TARGET_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
-        const stopIdInput = document.getElementById('stopIdInput');
+        const stopId = document.getElementById('stopIdInput').value.trim();
         const resultsDiv = document.getElementById('results');
-        const stopId = stopIdInput.value.trim();
 
         if (!stopId) {
-            alert('Please provide a valid 6-digit Stop ID.');
+            alert('Please provide a 6-digit Stop ID.');
             return;
         }
 
-        resultsDiv.innerHTML = '<div class="status-msg">Fetching live schedule updates...</div>';
+        resultsDiv.innerHTML = '<div class="status-msg">Fetching direct schedule streams...</div>';
 
-        try {
-            // Secure connection via the AllOrigins public CORS proxy
-            const targetUrl = `https://rt.data.gov.hk/v1/transport/batch/stop-eta?stop_id=${stopId}`;
-            const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-            
-            if (!response.ok) throw new Error('Proxy server error.');
-            
-            const proxyData = await response.json();
-            
-            // Safely unpack and parse the internal string returned by the proxy
-            const payload = JSON.parse(proxyData.contents);
-            
-            if (!payload || !payload.data || payload.data.length === 0) {
-                resultsDiv.innerHTML = '<div class="status-msg">No bus schedules found for this stop code.</div>';
-                return;
-            }
+        let allEtaData = [];
 
-            // Filter out everything except Citybus (CTB) and Joint KMB runs matching your whitelist
-            const filteredBuses = payload.data.filter(bus => 
-                (bus.co === "CTB" || bus.co === "KMB") && TARGET_ROUTES.has(bus.route.toUpperCase())
-            );
-
-            if (filteredBuses.length === 0) {
-                resultsDiv.innerHTML = '<div class="status-msg">None of your monitored routes are arriving soon.</div>';
-                return;
-            }
-
-            // Sort chronologically based on ETA timestamps
-            filteredBuses.sort((a, b) => new Date(a.eta) - new Date(b.eta));
-
-            const currentTime = new Date();
-
-            resultsDiv.innerHTML = filteredBuses.map(bus => {
-                let displayTime = "";
-                let isImminent = false;
-
-                if (bus.eta) {
-                    const diffMs = new Date(bus.eta) - currentTime;
-                    const minsLeft = Math.max(0, Math.round(diffMs / 60000));
-                    
-                    if (minsLeft <= 1) {
-                        displayTime = minsLeft === 0 ? "Arrived" : "1 min";
-                        isImminent = true;
-                    } else {
-                        displayTime = `${minsLeft} mins`;
+        // Fetch data for each route one-by-one to safely bypass backend locks
+        for (const route of TARGET_ROUTES) {
+            try {
+                const url = `https://rt.data.gov.hk/v2/transport/citybus/stop-eta/ctb/${stopId}/${route}`;
+                const response = await fetch(url);
+                if (response.ok) {
+                    const json = await response.json();
+                    if (json.data && json.data.length > 0) {
+                        allEtaData = allEtaData.concat(json.data);
                     }
-                } else {
-                    displayTime = bus.rmk_en || "No ETA";
                 }
-
-                const destName = bus.dest_en || "Destination";
-                const operator = bus.co === "CTB" ? "Citybus" : "KMB (Joint Route)";
-
-                return `
-                    <div class="bus-card">
-                        <div class="bus-info">
-                            <div class="route-number">${bus.route}</div>
-                            <div class="destination-details">
-                                <div class="destination-text">to ${destName}</div>
-                                <div class="operator-text">${operator}</div>
-                            </div>
-                        </div>
-                        <div class="eta-container">
-                            <div class="eta-value ${isImminent ? 'imminent' : ''}">${displayTime}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-        } catch (error) {
-            console.error(error);
-            resultsDiv.innerHTML = '<div class="status-msg" style="color: #ff3b30;">Failed to sync schedules. Please try again.</div>';
+            } catch (e) {
+                console.error(`Skipping route ${route} due to a connection block`, e);
+            }
         }
+
+        // Handle empty results
+        if (allEtaData.length === 0) {
+            resultsDiv.innerHTML = '<div class="status-msg">No active schedules found for these routes at this stop right now.</div>';
+            return;
+        }
+
+        // Sort schedules chronologically
+        allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
+
+        const currentTime = new Date();
+
+        resultsDiv.innerHTML = allEtaData.map(bus => {
+            let displayTime = "No ETA";
+            let isImminent = false;
+
+            if (bus.eta) {
+                const minsLeft = Math.max(0, Math.round((new Date(bus.eta) - currentTime) / 60000));
+                if (minsLeft <= 1) {
+                    displayTime = minsLeft === 0 ? "Arrived" : "1 min";
+                    isImminent = true;
+                } else {
+                    displayTime = `${minsLeft} mins`;
+                }
+            } else if (bus.rmk_en) {
+                displayTime = bus.rmk_en;
+            }
+
+            return `
+                <div class="bus-card">
+                    <div class="bus-info">
+                        <div class="route-number">${bus.route}</div>
+                        <div class="destination-text">to ${bus.dest_en || 'Destination'}</div>
+                    </div>
+                    <div class="eta-value ${isImminent ? 'imminent' : ''}">${displayTime}</div>
+                </div>
+            `;
+        }).join('');
     }
 
-    // Auto-load the schedule when the page opens
-    window.addEventListener('DOMContentLoaded', () => {
-        fetchSchedules();
-    });
+    // Load instantly when page displays
+    window.addEventListener('DOMContentLoaded', fetchSchedules);
 </script>
 
 </body>
