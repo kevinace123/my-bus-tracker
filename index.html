@@ -87,6 +87,7 @@
 </div>
 
 <script>
+    // Map your custom physical terminal pins to their respective data provider IDs
     const KMB_STOP_MAPPING = {
         "002243": "CE04-T-1100-0", // Queen Mary Hospital
         "002271": "CH09-T-1000-0"  // Chi Fu Fa Yuen Terminal
@@ -103,10 +104,10 @@
             return;
         }
 
-        resultsDiv.innerHTML = '<div class="status-msg">Connecting to Government API...</div>';
+        resultsDiv.innerHTML = '<div class="status-msg">Connecting to KMB & Citybus Data Feeds...</div>';
         let allEtaData = [];
 
-        // 1. Fetch ALL Citybus routes at this stop simultaneously using the official Batch Endpoint
+        // 1. Fetch Citybus Route Data Blocks
         try {
             const response = await fetch(`https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/${ctbStopId}`);
             if (response.ok) {
@@ -126,19 +127,19 @@
                     });
                 }
             }
-        } catch (e) {
-            console.error("Citybus Batch error:", e);
-        }
+        } catch (e) { console.error("Citybus Feed Failure:", e); }
 
-        // 2. Cross-reference KMB matrices for joint-operated or cross-harbor operations
+        // 2. Fetch data directly using the KMB public network resource architecture
         const kmbStopId = KMB_STOP_MAPPING[ctbStopId];
         if (kmbStopId) {
             try {
+                // Rebuilt to pull from the native KMB public CDN system linked in the dataset documentation
                 const kmbRes = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${kmbStopId}`);
                 if (kmbRes.ok) {
                     const json = await kmbRes.json();
-                    if (json.data && json.data.length > 0) {
+                    if (json && json.data) {
                         json.data.forEach(item => {
+                            // Extract baseline route signature (stripping internal direction configurations like -1 or -A)
                             const baseRoute = item.route.split('-')[0].toUpperCase();
                             if (MY_ROUTES.includes(baseRoute) && item.eta) {
                                 allEtaData.push({
@@ -152,10 +153,12 @@
                         });
                     }
                 }
-            } catch (e) { console.error("KMB error:", e); }
+            } catch (e) { 
+                console.error("KMB Open Data Feed Exception:", e); 
+            }
         }
 
-        // Clean out duplicate data blocks
+        // De-duplicate any cross-harbor overlapping lines
         const seen = new Set();
         allEtaData = allEtaData.filter(item => {
             const signature = `${item.route}-${item.eta}-${item.operator}`;
@@ -169,7 +172,7 @@
             return;
         }
 
-        // Sort dynamically by scheduled arrival time
+        // Sort globally by scheduled time sequence
         allEtaData.sort((a, b) => new Date(a.eta) - new Date(b.eta));
         const currentTime = new Date();
 
