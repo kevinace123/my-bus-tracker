@@ -87,13 +87,13 @@
 </div>
 
 <script>
-    // Unified mapping dictionary to cross-link physical locations across operators
+    // Dictionary mapping your 6-digit input locations to the corresponding official KMB alphanumeric Stop IDs
     const BUS_STOP_MAPPING = {
         "002243": { ctb: "002243", kmb: "CE04-T-1100-0" }, // Queen Mary Hospital
         "002271": { ctb: "002271", kmb: "CH09-T-1000-0" }  // Chi Fu Fa Yuen Terminal
     };
 
-    // Strict Filter Array: Only allow these exact route strings to render
+    // Requested Bus Number Filters
     const REQUESTED_ROUTES = ["95C", "37A", "970X", "37B", "37X", "40", "40P"];
 
     async function fetchSchedules() {
@@ -105,12 +105,12 @@
             return;
         }
 
-        resultsDiv.innerHTML = '<div class="status-msg">Streaming & filtering JSON data...</div>';
+        resultsDiv.innerHTML = '<div class="status-msg">Streaming & filtering live ETA feeds...</div>';
         let mergedEtaList = [];
 
         const targetStop = BUS_STOP_MAPPING[inputId] || { ctb: inputId, kmb: null };
 
-        // 1. Fetch and Filter Citybus JSON Stream
+        // 1. Fetch and filter Citybus dataset stream
         if (targetStop.ctb) {
             try {
                 const response = await fetch(`https://rt.data.gov.hk/v1/transport/batch/stop-eta/CTB/${targetStop.ctb}`);
@@ -119,7 +119,6 @@
                     if (json && json.data) {
                         json.data.forEach(item => {
                             const parsedRoute = item.route.toUpperCase();
-                            // Target filter rule implementation
                             if (REQUESTED_ROUTES.includes(parsedRoute) && item.eta) {
                                 mergedEtaList.push({
                                     route: parsedRoute,
@@ -132,10 +131,10 @@
                         });
                     }
                 }
-            } catch (e) { console.error("Citybus JSON stream failed:", e); }
+            } catch (e) { console.error("Citybus data call failed:", e); }
         }
 
-        // 2. Fetch and Filter KMB JSON Stream
+        // 2. Fetch and filter using your requested KMB stop-eta endpoint
         if (targetStop.kmb) {
             try {
                 const response = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${targetStop.kmb}`);
@@ -143,9 +142,8 @@
                     const json = await response.json();
                     if (json && json.data) {
                         json.data.forEach(item => {
-                            // Strip variant modifiers (e.g., '40P-1' to '40P')
+                            // Clear sequence branches (e.g. convert '40P-1' variants cleanly into '40P')
                             const parsedRoute = item.route.split('-')[0].toUpperCase();
-                            // Target filter rule implementation
                             if (REQUESTED_ROUTES.includes(parsedRoute) && item.eta) {
                                 mergedEtaList.push({
                                     route: parsedRoute,
@@ -158,10 +156,10 @@
                         });
                     }
                 }
-            } catch (e) { console.error("KMB JSON stream failed:", e); }
+            } catch (e) { console.error("KMB API link error:", e); }
         }
 
-        // 3. Deduplicate exact overlapping entries
+        // 3. Prevent duplicate layout listings
         const uniqueTracker = new Set();
         mergedEtaList = mergedEtaList.filter(item => {
             const fingerprint = `${item.route}-${item.eta}-${item.operator}`;
@@ -171,11 +169,11 @@
         });
 
         if (mergedEtaList.length === 0) {
-            resultsDiv.innerHTML = '<div class="status-msg">No matching departures found for your requested lines right now.</div>';
+            resultsDiv.innerHTML = '<div class="status-msg">No matching upcoming departures found for your target lines right now.</div>';
             return;
         }
 
-        // 4. Sort arrays chronologically and calculate relative time bounds
+        // 4. Chronological sorting based on current time gap calculations
         mergedEtaList.sort((a, b) => new Date(a.eta) - new Date(b.eta));
         const now = new Date();
 
@@ -206,7 +204,7 @@
         }).join('');
     }
 
-    // Initialize application pull on interface mount
+    // Auto-trigger on page load
     window.addEventListener('DOMContentLoaded', fetchSchedules);
 </script>
 
